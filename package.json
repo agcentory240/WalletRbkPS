@@ -1,0 +1,9 @@
+{
+    "name": "WalletRbkPS",
+    "description": "RBKmoney payment module for Wallet",
+    "type": "module",
+    "version": "1.0.1",
+    "updatepath":"",
+    "dependencies": {
+    }
+}

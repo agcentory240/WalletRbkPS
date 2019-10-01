@@ -1,0 +1,206 @@
+﻿<?php
+	//error_reporting(E_ALL);
+	//ini_set('display_errors', 1);
+	//Получим данные кошелька
+	//$application = $this->getApplication();
+	if ($this->getSession()->getAppId()) $app_id = $this->getSession()->getAppId(); else $app_id=$this->getApplication()->getId();
+	$db =Zend_Db_Table_Abstract::getDefaultAdapter();
+	$application = (new Application_Model_Application())->find($app_id);
+	$stmt = $db->query(
+		'SELECT version FROM module WHERE name = ?',
+		array('Wallet')
+	);
+	$current_version =$stmt->fetch()['version'];
+	
+
+	if (empty($current_version)) {
+		echo "Wallet module not found! Exit...";
+		?><br><a href="<?php echo (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]";?>" rel="" class="navigation"><i class="fa fa-sign-out fa-lg"></i> <?php echo __('Exit to Editor'); ?></a><br><?php
+		die(__("Wallet module not found! Exit..."));
+	}	
+	
+	$stmt = $db->query(
+		'SELECT * FROM application_option WHERE code = ?',
+		array('wallet')
+	);
+	$option_id = $stmt->fetch()['option_id'];
+	$stmt = $db->query(
+		'SELECT * FROM application_option_value WHERE option_id = ? and app_id = ?',
+		array($option_id, $app_id)
+	);
+	$value_id = $stmt->fetch()['value_id'];
+
+	$wallet = new Wallet_Model_Wallet();
+	$wallet->find(array("value_id" => $value_id));
+
+	$rbk = new WalletRbkPS_Model_PaymentMethodsRbk();
+	$rbk->find(array('wallet_id'=>$wallet->getId()));
+?>
+
+<div id="list-panel" class="settings-panel">  
+	<div class="row">
+		<div class="col-sm-12">
+			<h1>RBK Money. <?php echo __('Settings'); ?></h1>
+		</div>
+	  </div>
+	  <br>
+		<div class="row">
+		<div class="col-sm-8">
+			<p>Модуль позволяет пополнять внтуренний баланс пользователей в модуле "Кошелек" через сервис <a href="https://dashboard.rbk.money/" target=_"blank">RBK Money</a>. Сервис позволяет принимать средства с банковских карт, а также с GoogleP Pay и Apple Pay..</p>
+			<p>Для работы данного модуля, вам необходимо зарегистрироваться в <a href="https://dashboard.rbk.money/" target=_"blank">RBK Money</a> и заполнить данные для подключения.</p>
+		</div>
+		<div class="col-sm-4">
+			<a href="https://dashboard.rbk.money/" class="btn btn-lg btn-success" target="_blank">Перейти в RBK Money</a>
+		</div>
+	  </div>	  
+	  <br>
+	  <form class="form-horizontal" id="rbksettingsForm" method="post" action="<?php echo $this->getUrl('walletrbkps/admin/save'); ?>">
+	  <input type="hidden" name="wallet_id" value="<?php echo $wallet->getId();?>">
+	  <input type="hidden" name="rbk_id" value="<?php echo $rbk->getId();?>">
+	  <div class="row">
+		<div class="col-sm-12">
+		
+		  <div class="form-group">
+			<label for="inputTitle" class="col-sm-2 control-label">Enabled?</label>
+			<div class="col-sm-10">
+				<select class="form-control" name="enabled">
+					<option value=1 <?php if ($rbk->getData('enabled')=="1") echo "selected='selected'";?>><?php echo __('Method enabled'); ?></option>
+					<option value=0 <?php if ($rbk->getData('enabled')=="0") echo "selected='selected'";?>><?php echo __('Method disabled'); ?></option>
+				</select>
+			</div>
+		  </div>	
+		  
+		  <div class="form-group">
+			<label for="inputTitle" class="col-sm-2 control-label"><?php echo __('Method title'); ?></label>
+			<div class="col-sm-10">
+			  <input type="text" class="form-control" id="inputTitle" name="title" placeholder="via RBK Money..." value="<?php echo $rbk->getData('title');?>">
+			</div>
+		  </div>
+		  
+		  <div class="form-group">
+			<label for="inputUsername" class="col-sm-2 control-label">Shop ID</label>
+			<div class="col-sm-10">
+			  <input type="text" class="form-control" id="inputUsername" name="shop_id" placeholder="Shop ID" value="<?php echo $rbk->getData('shop_id');?>">
+			</div>
+		  </div>
+		  <div class="form-group">
+			<label for="inputPassword" class="col-sm-2 control-label">API</label>
+			<div class="col-sm-10">
+			  <input type="text" class="form-control" name="api_key" id="inputPassword" placeholder="API" value="<?php echo $rbk->getData('api_key');?>">
+			</div>
+		  </div>
+		  <div class="form-group">
+			<label class="col-sm-2 control-label">Notification URL</label>
+			<div class="col-sm-10">
+			  <input type="text" class="form-control" name="notification_url"  placeholder="Notification URL" value="<?php echo $application->getDomain() ? $application->getDomain() : $application->getUrl() ?>walletrbkps/mobile_rbk/notify" readonly read-only>
+			</div>
+		  </div>
+		</div>
+	  </div>
+	<div class="row" style="padding:10px;">
+		<div class="col-sm-6 text-right"><button type="button" class="btn btn-success btn-lg rbk_save_settings" id="rbk_save_settings"><i class="fa fa-floppy-o" aria-hidden="true"></i> <?php echo $this->_('Save'); ?></button></div>
+		<div class="col-sm-6 text-left"><button type="button" class="btn btn-default btn-lg rbk_back_button" id="rbk_back_button"><i class="fa fa-undo" aria-hidden="true"></i> <?php echo $this->_('Undo'); ?></button></div>
+	</div></form>
+	<br>
+	<br>
+	<div class="row">
+		<div class="col-sm-12">
+		<div class="panel panel-default">
+		  <div class="panel-heading">Настройка модуля</div>
+		  <div class="panel-body">
+			<div class="row">
+				<div class="col-sm-6"><img src="/app/local/modules/WalletRbkPS/assets/info1.png"  class="img-thumbnail"></div><div class="col-sm-6">Где находится индентификатор магазина (SHOP_ID)</div>
+			</div>
+			<div class="row">
+				<div class="col-sm-6"><img src="/app/local/modules/WalletRbkPS/assets/info2.png"  class="img-thumbnail"></div><div class="col-sm-6">Где находится Api Key</div>
+			</div>
+			<div class="row">
+				<div class="col-sm-6"><img src="/app/local/modules/WalletRbkPS/assets/info3.png"  class="img-thumbnail"></div><div class="col-sm-6">Куда необходимо добавить ваш обратный адрес для уведомлений (Notification URL). Внимание, это важно! Если его не указать, то от RBK Money не будут приходить уведомления о платежах и средства в кошелек добавляться не будут.!</div>
+			</div>			
+		  </div>
+		</div>			
+		</div>
+	  </div>	
+</div>
+<script type="text/javascript">
+var form_valid = false;
+$(document).ready(function(){
+	$("#rbk_back_button").on("click",function() {
+		loader_show();
+		$.ajax({
+		   url: '<?php echo $this->getUrl('wallet/admin/payment'); ?>',
+		   type:'GET',
+		   data:"parameter=WalletRbkPS",
+		   dataType: "json",
+		   success: function(data){
+				$("#error-message").hide();
+				$("#success-message").hide();
+			   $('#main').html(data.html);
+			   loader_hide();
+		   }
+		});
+	});
+	
+	
+	$("#rbk_save_settings").on("click",function() {
+
+		//swal("Here's a message!");
+		loader_show();
+		
+		$.ajax({
+			   type: "POST",
+			   url:$("#rbksettingsForm").attr("action"),
+			   data: $("#rbksettingsForm").serialize(), // serializes the form's elements.
+			   dataType: "json",
+			   success: function(data)
+			   {
+				   console.log(data); // show response from the php script.
+				   if (data.success) {
+						$("#error-message").hide();
+						$("#success-message").html(data.success_message);
+						$("#success-message").show();
+						if ($('#item-subpanel').length) {
+							$('#item-subpanel').hide();
+							$('#item-panel').show();
+							$('#list-panel').hide();
+						} else {
+							$('#item-panel').hide();
+							$('#list-panel').show();		
+						}
+						
+						/*simple reload page*/
+						loader_show();							
+						$.ajax({
+						   url:'<?php echo $this->getUrl('wallet/admin/payment'); ?>',
+						   type:'GET',
+						   data: "parameter=WalletRbkPS",
+						   dataType: "json",
+						   success: function(data1){
+								$("#error-message").hide();
+								$("#success-message").hide();
+							   $('#main').html(data1.html);
+							   $("#success-message").html(data.success_message).show();
+							   loader_hide();
+						   }
+						});							
+
+						
+				   }
+				   $("html, body").animate({ scrollTop: 0 }, "fast");
+			   },
+			   error: function (jqXHR) {
+				var rdata = JSON.parse(jqXHR.responseText);
+				console.log(jqXHR.responseText);
+			   //console.log(exception);
+				$("#error-message").html(rdata.message);
+				$("#error-message").show();
+				$("#success-message").html();
+				$("#success-message").hide();
+				loader_hide();
+				$("html, body").animate({ scrollTop: 0 }, "fast");
+			   }
+			 });		
+	});		
+	
+});
+</script>
